@@ -12,8 +12,8 @@ import cromwell.core._
 import cromwell.core.actor.StreamActorHelper.ActorRestartException
 import cromwell.core.filesystem.CromwellFileSystems
 import cromwell.core.io.Throttle
-import cromwell.docker.DockerHashActor
-import cromwell.docker.DockerHashActor.DockerHashContext
+import cromwell.docker.DockerInfoActor
+import cromwell.docker.DockerInfoActor.DockerHashContext
 import cromwell.docker.local.DockerCliFlow
 import cromwell.docker.registryv2.flows.HttpFlowWithRetry.ContextWithRequest
 import cromwell.docker.registryv2.flows.dockerhub.DockerHubFlow
@@ -136,7 +136,7 @@ abstract class CromwellRootActor(gracefulShutdown: Boolean, abortJobsOnTerminate
     case DockerRemoteLookup => Seq(dockerHubFlow, googleFlow, quayFlow)
   }
 
-  lazy val dockerHashActor = context.actorOf(DockerHashActor.props(dockerFlows, dockerActorQueueSize,
+  lazy val dockerHashActor = context.actorOf(DockerInfoActor.props(dockerFlows, dockerActorQueueSize,
     dockerConf.cacheEntryTtl, dockerConf.cacheSize)(materializer), "DockerHashActor")
 
   lazy val backendSingletons = CromwellBackends.instance.get.backendLifecycleActorFactories map {

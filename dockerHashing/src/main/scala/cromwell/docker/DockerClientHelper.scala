@@ -2,7 +2,7 @@ package cromwell.docker
 
 import akka.actor.{Actor, ActorLogging, ActorRef}
 import cromwell.core.actor.RobustClientHelper
-import cromwell.docker.DockerHashActor.DockerHashResponse
+import cromwell.docker.DockerInfoActor.DockerHashResponse
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -19,7 +19,7 @@ trait DockerClientHelper extends RobustClientHelper { this: Actor with ActorLogg
       receive.apply(context -> dockerResponse)
   }
 
-  def sendDockerCommand(dockerHashRequest: DockerHashRequest, timeout: FiniteDuration = RobustClientHelper.DefaultRequestLostTimeout) = {
+  def sendDockerCommand(dockerHashRequest: DockerInfoRequest, timeout: FiniteDuration = RobustClientHelper.DefaultRequestLostTimeout) = {
     robustSend(dockerHashRequest, dockerHashingActor, timeout)
   }
 

@@ -9,11 +9,12 @@ import akka.http.scaladsl.model.headers.{Authorization, OAuth2BearerToken}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream._
 import akka.stream.scaladsl.{Flow, GraphDSL, Merge}
-import cromwell.docker.DockerHashActor._
+import cats.data.NonEmptyList
+import cromwell.docker.DockerInfoActor._
 import cromwell.docker.registryv2.DockerRegistryV2AbstractFlow._
 import cromwell.docker.registryv2.flows.HttpFlowWithRetry.ContextWithRequest
 import cromwell.docker.registryv2.flows.{FlowUtils, HttpFlowWithRetry}
-import cromwell.docker.{DockerFlow, DockerHashResult, DockerImageIdentifierWithoutHash}
+import cromwell.docker.{DockerFlow, DockerHashResult, DockerImageIdentifier}
 import spray.json._
 
 import scala.concurrent.duration._
@@ -24,10 +25,10 @@ import scala.util.{Failure, Success, Try}
 object DockerRegistryV2AbstractFlow {
   type HttpDockerFlow = Flow[(HttpRequest, ContextWithRequest[DockerHashContext]), (Try[HttpResponse], ContextWithRequest[DockerHashContext]), NotUsed]
   val StrictTimeout = 30 seconds
+  val HashAlgorithm = "sha256"
   
   val DigestHeaderName = "Docker-Content-Digest".toLowerCase
   val AcceptHeader = HttpHeader.parse("Accept", "application/vnd.docker.distribution.manifest.v2+json") match {
-    case ParsingResult.Ok(header, errors) if errors.isEmpty => header
     case ParsingResult.Ok(header, errors) =>
       errors foreach { err => logger.warn(err.formatPretty) }
       header
@@ -77,10 +78,10 @@ abstract class DockerRegistryV2AbstractFlow(httpClientFlow: HttpDockerFlow)(impl
 
   private [registryv2] val tokenFlow = {
     val responseHandlerFlow = Flow[(HttpResponse, DockerHashContext)]
-      .mapAsync(1)(Function.tupled(tokenResponseHandler))
-      // Map the Try[String] token to a Try[Option[String]].
+      .map(Function.tupled(tokenResponseHandler))
+      // Map the Future[String] token to a Future[Option[String]].
       // This allows potential users of this class to override this flow and return an empty token
-      .map { case (tryToken, context) => (tryToken map Option.apply, context) }
+      .map { case (futureToken, context) => (futureToken map Option.apply, context) }
     
     requestTransformFlow(buildTokenRequest, responseHandlerFlow)
   }
@@ -112,7 +113,7 @@ abstract class DockerRegistryV2AbstractFlow(httpClientFlow: HttpDockerFlow)(impl
     * Returns true if this flow is able to process this docker image,
     * false otherwise
     */
-  def accepts(dockerImageIdentifierWithoutHash: DockerImageIdentifierWithoutHash) = dockerImageIdentifierWithoutHash.host.contains(registryHostName)
+  def accepts(dockerImageIdentifier: DockerImageIdentifier) = dockerImageIdentifier.host.contains(registryHostName)
   
   /* Methods that must to be implemented by a subclass */
 
@@ -142,7 +143,7 @@ abstract class DockerRegistryV2AbstractFlow(httpClientFlow: HttpDockerFlow)(impl
   /**
     * Builds the token URI to be queried based on a DockerImageID
     */
-  protected def buildTokenRequestUri(dockerImageID: DockerImageIdentifierWithoutHash): String = {
+  protected def buildTokenRequestUri(dockerImageID: DockerImageIdentifier): String = {
     val service = serviceName map { name => s"service=$name&" } getOrElse ""
     s"https://$authorizationServerHostName/token?${service}scope=repository:${dockerImageID.nameWithDefaultRepository}:pull"
   }
@@ -150,7 +151,7 @@ abstract class DockerRegistryV2AbstractFlow(httpClientFlow: HttpDockerFlow)(impl
   /**
     * Http method used for the manifest request
     */
-  protected def manifestRequestHttpMethod: HttpMethod = HttpMethods.HEAD
+  protected def manifestRequestHttpMethod: HttpMethod = HttpMethods.GET
 
   /**
     * Generic method to build a flow that creates a request, sends it,
@@ -163,7 +164,7 @@ abstract class DockerRegistryV2AbstractFlow(httpClientFlow: HttpDockerFlow)(impl
     */
   private def requestTransformFlow[A, B](
                                           requestBuilderFunction: A => (HttpRequest, DockerHashContext),
-                                          responseHandlerFlow: Flow[(HttpResponse, DockerHashContext), (Try[B], DockerHashContext), NotUsed]
+                                          responseHandlerFlow: Flow[(HttpResponse, DockerHashContext), (Future[B], DockerHashContext), NotUsed]
                                         ) = GraphDSL.create() { implicit builder =>
     import GraphDSL.Implicits._
 
@@ -183,7 +184,7 @@ abstract class DockerRegistryV2AbstractFlow(httpClientFlow: HttpDockerFlow)(impl
     })
 
     // Partition processed responses
-    val processResponse = builder.add(FlowUtils.fanOutTry[B, DockerHashContext])
+    val processResponse = builder.add(FlowUtils.fanOutFuture[B, DockerHashContext])
     
     val successfulProcessing = processResponse.out0
     val failedProcessing = processResponse.out1.map(Function.tupled(throwableToFailureMessage))
@@ -218,23 +219,19 @@ abstract class DockerRegistryV2AbstractFlow(httpClientFlow: HttpDockerFlow)(impl
   /**
     * Parse the http response coming back from the token request and returns the body as JsObject
     */
-  private def tokenResponseHandler(response: HttpResponse, dockerHashContext: DockerHashContext) = response match {
+  private def tokenResponseHandler(response: HttpResponse, dockerHashContext: DockerHashContext): (Future[String], DockerHashContext) = response match {
     case httpResponse if httpResponse.status.isSuccess() =>
-      Unmarshal(httpResponse.entity).to[String] map { body =>
-        (
-          Try(body.parseJson.asJsObject) flatMap extractToken,
-          dockerHashContext
-        )
-      } recoverWith {
-        case failure => Future.successful((Failure(failure), dockerHashContext))
-      }
-    case httpResponse =>
-      Future.successful(
-        (
-          Failure(UnsuccessfulHttpResponseException(httpResponse)),
-          dockerHashContext
-        )
+      (
+        Unmarshal(httpResponse.entity).to[String] flatMap { body =>
+          Future.fromTry(extractToken(body.parseJson.asJsObject))
+        },
+        dockerHashContext
       )
+    case httpResponse =>
+        (
+          Future.failed(UnsuccessfulHttpResponseException(httpResponse)),
+          dockerHashContext
+        )
   }
 
   /**
@@ -251,7 +248,7 @@ abstract class DockerRegistryV2AbstractFlow(httpClientFlow: HttpDockerFlow)(impl
   /**
     * Builds the manifest URI to be queried based on a DockerImageID
     */
-  private def buildManifestUri(dockerImageID: DockerImageIdentifierWithoutHash): String = {
+  private def buildManifestUri(dockerImageID: DockerImageIdentifier): String = {
     s"https://$registryHostName/v2/${dockerImageID.nameWithDefaultRepository}/manifests/${dockerImageID.reference}"
   }
 
@@ -269,7 +266,8 @@ abstract class DockerRegistryV2AbstractFlow(httpClientFlow: HttpDockerFlow)(impl
       case None =>
         HttpRequest(
           method = manifestRequestHttpMethod,
-          uri = buildManifestUri(dockerHashContext.dockerImageID)
+          uri = buildManifestUri(dockerHashContext.dockerImageID),
+          headers = scala.collection.immutable.Seq(AcceptHeader)
         )
     }
 
@@ -279,28 +277,51 @@ abstract class DockerRegistryV2AbstractFlow(httpClientFlow: HttpDockerFlow)(impl
   /**
     * Handles the http response from the manifest request
     */
-  private def manifestResponseHandler(response: HttpResponse, dockerHashContext: DockerHashContext) = response match {
+  private def manifestResponseHandler(response: HttpResponse,
+                                      dockerHashContext: DockerHashContext
+                                     ): (Future[DockerHashSuccessResponse], DockerHashContext) = response match {
     case httpResponse if httpResponse.status.isSuccess() =>
       (
-        extractContentDigest(response.headers, dockerHashContext),
+        httpResponseToDockerResponse(response, dockerHashContext),
         dockerHashContext
         )
     case httpResponse => 
       (
-        Failure(UnsuccessfulHttpResponseException(httpResponse)),
+        Future.failed(UnsuccessfulHttpResponseException(httpResponse)),
         dockerHashContext
       )
   }
   
+  protected final def isManifestV2(response: HttpResponse): Boolean = response.entity.contentType.mediaType.value == AcceptHeader.value()
+  
+  protected def parseV2Manifest(response: HttpResponse, dockerHashContext: DockerHashContext): Future[Option[DockerManifest]] = if (isManifestV2(response)) {
+    def errorMessage(errors: NonEmptyList[String]) = 
+      s"Docker manifest for ${dockerHashContext.request.dockerImageID.fullName} could not be parsed: ${errors.toList.mkString(", ")}"
+
+
+    def parsedManifest(bodyAsString: String) =
+      DockerManifest.parseManifest(bodyAsString) match {
+        case Right(manifest) => Option(manifest)
+        case Left(errors) =>
+          logger.warn(errorMessage(errors))
+          None
+      }
+
+    Unmarshal(response.entity).to[String].map(parsedManifest)
+  } else Future.successful(None)
+
   /**
     * Extracts the digest from the response headers
     */
-  private def extractContentDigest(headers: Seq[HttpHeader], dockerHashContext: DockerHashContext) = {
-    headers find { _.is(DigestHeaderName) } match {
-      case Some(digestHeader) =>
-        DockerHashResult.fromString(digestHeader.value()) map { DockerHashSuccessResponse(_, dockerHashContext.request)}
-      case None => Failure(new Exception("Cannot find digest header"))
-    }
+  protected def httpResponseToDockerResponse(response: HttpResponse, dockerHashContext: DockerHashContext) = {
+    for {
+      digest <- Future.fromTry(extractDigestFromHeader(response.headers))
+      manifest <- parseV2Manifest(response, dockerHashContext)
+    } yield DockerHashSuccessResponse(digest, manifest.map(_.compressedSize).map(DockerSize.apply), dockerHashContext.request)
+  }
+
+  protected final def extractDigestFromHeader(headers: Seq[HttpHeader]): Try[DockerHashResult] = {
+    headers find { _.is(DigestHeaderName) } map { _.value() } map DockerHashResult.fromString getOrElse Failure(new Exception("Cannot find digest header"))
   }
 
   /**

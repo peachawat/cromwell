@@ -1,7 +1,7 @@
 package cromwell.docker.local
 
 import cromwell.core.Tags.IntegrationTest
-import cromwell.docker.DockerHashActor.DockerHashFailedResponse
+import cromwell.docker.DockerInfoActor.DockerHashFailedResponse
 import cromwell.docker.{DockerFlow, DockerFlowSpec}
 import org.scalatest.{FlatSpecLike, Matchers}
 

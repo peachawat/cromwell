@@ -24,8 +24,9 @@ object DockerConfiguration {
       case "remote" => DockerRemoteLookup
       case other => throw new IllegalArgumentException(s"Unrecognized docker hash lookup method: $other")
     }
+    val sizeCompressionFactor = validate { dockerHashLookupConfig.as[Int]("size-compression-factor") }
 
-    val dockerConfiguration = (enabled, gcrApiQueriesPer100Seconds, cacheEntryTtl, cacheSize, method) mapN  DockerConfiguration.apply
+    val dockerConfiguration = (enabled, gcrApiQueriesPer100Seconds, cacheEntryTtl, cacheSize, method, sizeCompressionFactor) mapN  DockerConfiguration.apply
     
     dockerConfiguration match {
       case Valid(conf) => conf
@@ -39,7 +40,8 @@ case class DockerConfiguration(
                                 gcrApiQueriesPer100Seconds: Int,
                                 cacheEntryTtl: FiniteDuration,
                                 cacheSize: Long,
-                                method: DockerHashLookupMethod
+                                method: DockerHashLookupMethod,
+                                sizeCompressionFactor: Int
                               )
 
 sealed trait DockerHashLookupMethod

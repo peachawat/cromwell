@@ -459,7 +459,7 @@ object Dependencies {
 
   val databaseMigrationDependencies = liquibaseDependencies ++ dbmsDependencies
 
-  val dockerHashingDependencies = akkaHttpDependencies
+  val dockerHashingDependencies = akkaHttpDependencies ++ circeDependencies
 
   val cromwellApiClientDependencies = List(
     "org.scalaz" %% "scalaz-core" % scalazV,

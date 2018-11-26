@@ -2,7 +2,7 @@ package cromwell.docker
 
 import akka.http.scaladsl.model._
 import akka.stream.scaladsl.Flow
-import cromwell.docker.DockerHashActor.{DockerHashContext, DockerHashResponse}
+import cromwell.docker.DockerInfoActor.{DockerHashContext, DockerHashResponse}
 import cromwell.docker.registryv2.flows.HttpFlowWithRetry.ContextWithRequest
 
 import scala.util.Try
@@ -56,5 +56,5 @@ class DockerFlowMock(responses: MockHashResponse*) extends DockerFlow {
   def count() = _count
 
   override def buildFlow() = Flow[DockerHashContext] map nextResponse
-  override def accepts(dockerImageIdentifierWithoutHash: DockerImageIdentifierWithoutHash): Boolean = true
+  override def accepts(dockerImageIdentifier: DockerImageIdentifier): Boolean = true
 }

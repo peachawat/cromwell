@@ -4,11 +4,11 @@ import akka.actor.Scheduler
 import akka.http.scaladsl.model.headers.{Authorization, BasicHttpCredentials}
 import akka.stream.ActorMaterializer
 import cromwell.core.DockerCredentials
-import DockerHub._
-import cromwell.docker.DockerHashActor.DockerHashContext
-import cromwell.docker.DockerImageIdentifierWithoutHash
+import cromwell.docker.DockerImageIdentifier
+import cromwell.docker.DockerInfoActor.DockerHashContext
 import cromwell.docker.registryv2.DockerRegistryV2AbstractFlow
 import cromwell.docker.registryv2.DockerRegistryV2AbstractFlow.HttpDockerFlow
+import cromwell.docker.registryv2.flows.dockerhub.DockerHub._
 import mouse.all._
 
 import scala.concurrent.ExecutionContext
@@ -30,6 +30,6 @@ class DockerHubFlow(httpClientFlow: HttpDockerFlow)(implicit ec: ExecutionContex
     }
   }
 
-  override def accepts(dockerImageIdentifierWithoutHash: DockerImageIdentifierWithoutHash): Boolean =
-    dockerImageIdentifierWithoutHash.host |> isValidDockerHubHost
+  override def accepts(dockerImageIdentifier: DockerImageIdentifier): Boolean =
+    dockerImageIdentifier.host |> isValidDockerHubHost
 }

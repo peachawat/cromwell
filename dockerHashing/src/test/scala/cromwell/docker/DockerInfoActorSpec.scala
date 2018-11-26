@@ -1,7 +1,7 @@
 package cromwell.docker
 
 import cromwell.core.Tags.IntegrationTest
-import cromwell.docker.DockerHashActor._
+import cromwell.docker.DockerInfoActor._
 import cromwell.docker.registryv2.flows.dockerhub.DockerHubFlow
 import cromwell.docker.registryv2.flows.gcr.GoogleFlow
 import org.scalatest.{FlatSpecLike, Matchers}
@@ -9,7 +9,7 @@ import org.scalatest.{FlatSpecLike, Matchers}
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
-class DockerHashActorSpec extends DockerFlowSpec("DockerHashActorSpec") with FlatSpecLike with Matchers {
+class DockerInfoActorSpec extends DockerFlowSpec("DockerHashActorSpec") with FlatSpecLike with Matchers {
   behavior of "DockerRegistryActor"
 
   override protected lazy val registryFlows = Seq(new DockerHubFlow(httpPool), new GoogleFlow(httpPool, 50000))
@@ -18,7 +18,7 @@ class DockerHashActorSpec extends DockerFlowSpec("DockerHashActorSpec") with Fla
     dockerActor ! makeRequest("ubuntu:latest")
     
     expectMsgPF(5 second) {
-      case DockerHashSuccessResponse(DockerHashResult(alg, hash), _) => 
+      case DockerHashSuccessResponse(DockerHashResult(alg, hash), _, _) => 
         alg shouldBe "sha256"
         hash should not be empty
     }
@@ -28,7 +28,7 @@ class DockerHashActorSpec extends DockerFlowSpec("DockerHashActorSpec") with Fla
     dockerActor ! makeRequest("gcr.io/google-containers/alpine-with-bash:1.0")
 
     expectMsgPF(5 second) {
-      case DockerHashSuccessResponse(DockerHashResult(alg, hash), _) =>
+      case DockerHashSuccessResponse(DockerHashResult(alg, hash), _, _) =>
         alg shouldBe "sha256"
         hash should not be empty
     }
@@ -58,10 +58,10 @@ class DockerHashActorSpec extends DockerFlowSpec("DockerHashActorSpec") with Fla
   it should "cache results" in {
     
     val image1 = dockerImage("ubuntu:latest")
-    val request = DockerHashRequest(image1)
+    val request = DockerInfoRequest(image1)
     
     val hashSuccess = DockerHashResult("sha256", "hashvalue")
-    val responseSuccess = DockerHashSuccessResponse(hashSuccess, request)
+    val responseSuccess = DockerHashSuccessResponse(hashSuccess, None, request)
     val mockResponseSuccess = MockHashResponse(responseSuccess, 1)
     
     val responseFailure = DockerHashFailedResponse(new Exception("Docker hash failed - part of test flow"), request)
@@ -69,10 +69,10 @@ class DockerHashActorSpec extends DockerFlowSpec("DockerHashActorSpec") with Fla
     
     // Send back success, failure, success, failure, ...
     val mockHttpFlow = new DockerFlowMock(mockResponseSuccess, mockResponseFailure)
-    val dockerActorWithCache = system.actorOf(DockerHashActor.props(Seq(mockHttpFlow), 1000, 3 seconds, 10)(materializer))
+    val dockerActorWithCache = system.actorOf(DockerInfoActor.props(Seq(mockHttpFlow), 1000, 3 seconds, 10)(materializer))
     
     dockerActorWithCache ! request
-    expectMsg(DockerHashSuccessResponse(hashSuccess, request))
+    expectMsg(DockerHashSuccessResponse(hashSuccess, None, request))
     // Necessary to give some time to the cache to be updated - as it's decoupled from sending back the response
     Thread.sleep(1000)
     
@@ -92,7 +92,7 @@ class DockerHashActorSpec extends DockerFlowSpec("DockerHashActorSpec") with Fla
 
 
   it should "not deadlock" taggedAs IntegrationTest in {
-    lazy val dockerActorScale = system.actorOf(DockerHashActor.props(registryFlows, 1000, 20.minutes, 0)(materializer))
+    lazy val dockerActorScale = system.actorOf(DockerInfoActor.props(registryFlows, 1000, 20.minutes, 0)(materializer))
     0 until 400 foreach { _ =>
       dockerActorScale ! makeRequest("gcr.io/google-containers/alpine-with-bash:1.0")
     }

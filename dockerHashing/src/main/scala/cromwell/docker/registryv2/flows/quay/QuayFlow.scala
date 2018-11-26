@@ -4,7 +4,7 @@ import akka.actor.Scheduler
 import akka.http.scaladsl.model.HttpHeader
 import akka.stream.scaladsl.{Flow, GraphDSL, Source}
 import akka.stream.{ActorMaterializer, FanOutShape2}
-import cromwell.docker.DockerHashActor.{DockerHashContext, DockerHashResponse}
+import cromwell.docker.DockerInfoActor.{DockerHashContext, DockerHashResponse}
 import cromwell.docker.registryv2.DockerRegistryV2AbstractFlow
 import cromwell.docker.registryv2.DockerRegistryV2AbstractFlow.HttpDockerFlow
 

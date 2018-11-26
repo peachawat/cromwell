@@ -1,6 +1,6 @@
 package cromwell.docker
 
-import cromwell.docker.DockerHashActor.DockerHashUnknownRegistry
+import cromwell.docker.DockerInfoActor.DockerHashUnknownRegistry
 import org.scalatest.{FlatSpecLike, Matchers}
 
 import scala.concurrent.duration._

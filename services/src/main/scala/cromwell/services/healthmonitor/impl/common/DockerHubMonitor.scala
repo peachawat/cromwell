@@ -5,10 +5,10 @@ import akka.pattern.ask
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import akka.util.Timeout
-import cromwell.docker.DockerHashActor.{DockerHashContext, DockerHashFailedResponse, DockerHashResponse, DockerHashSuccessResponse}
+import cromwell.docker.DockerInfoActor.{DockerHashContext, DockerHashFailedResponse, DockerHashResponse, DockerHashSuccessResponse}
 import cromwell.docker.registryv2.flows.HttpFlowWithRetry.ContextWithRequest
 import cromwell.docker.registryv2.flows.dockerhub.DockerHubFlow
-import cromwell.docker.{DockerHashActor, DockerHashRequest, DockerImageIdentifierWithoutHash}
+import cromwell.docker.{DockerInfoActor, DockerInfoRequest, DockerImageIdentifierWithoutHash}
 import cromwell.services.healthmonitor.HealthMonitorServiceActor._
 
 import scala.concurrent.duration._
@@ -27,7 +27,7 @@ trait DockerHubMonitor {
 
   lazy val dockerHttpPool = Http().superPool[ContextWithRequest[DockerHashContext]]()
   lazy val dockerHubFlow = List(new DockerHubFlow(dockerHttpPool)(ec, materializer, system.scheduler))
-  lazy val dockerHashActor = system.actorOf(DockerHashActor.props(dockerHubFlow, 500, 0.minutes, 0)(materializer), "HealthMonitorDockerHashActor")
+  lazy val dockerHashActor = system.actorOf(DockerInfoActor.props(dockerHubFlow, 500, 0.minutes, 0)(materializer), "HealthMonitorDockerHashActor")
 
   lazy val DockerHub = MonitoredSubsystem("DockerHub", checkDockerhub _)
 
@@ -45,5 +45,5 @@ trait DockerHubMonitor {
 }
 
 object DockerHubMonitor {
-  val UbuntuLatestHashRequest = DockerHashRequest(DockerImageIdentifierWithoutHash(None, None, "ubuntu", "latest"))
+  val UbuntuLatestHashRequest = DockerInfoRequest(DockerImageIdentifierWithoutHash(None, None, "ubuntu", "latest"))
 }

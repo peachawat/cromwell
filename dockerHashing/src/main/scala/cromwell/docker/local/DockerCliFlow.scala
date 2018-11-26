@@ -5,8 +5,8 @@ import java.util.concurrent.TimeoutException
 import akka.actor.Scheduler
 import akka.stream.scaladsl.{Flow, GraphDSL, Merge, Partition}
 import akka.stream.FlowShape
-import cromwell.docker.DockerHashActor._
-import cromwell.docker.{DockerFlow, DockerHashActor, DockerHashResult, DockerImageIdentifierWithoutHash}
+import cromwell.docker.DockerInfoActor._
+import cromwell.docker._
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -22,7 +22,7 @@ class DockerCliFlow(implicit ec: ExecutionContext, scheduler: Scheduler) extends
   // https://github.com/docker/docker/issues/12606
   lazy val firstLookupTimeout = 5.seconds
 
-  override def accepts(dockerImageIdentifierWithoutHash: DockerImageIdentifierWithoutHash): Boolean = true
+  override def accepts(dockerImageIdentifier: DockerImageIdentifier): Boolean = true
 
   override def buildFlow() = GraphDSL.create() { implicit builder =>
     import GraphDSL.Implicits._
@@ -67,17 +67,17 @@ object DockerCliFlow {
     */
   private def lookupHash(context: DockerHashContext): (DockerHashResponse, DockerHashContext) = {
     val dockerCliKey = cliKeyFromImageId(context)
-    DockerHashActor.logger.debug("Looking up hash of {}", dockerCliKey.fullName)
+    DockerInfoActor.logger.debug("Looking up hash of {}", dockerCliKey.fullName)
     val result = DockerCliClient.lookupHash(dockerCliKey) match {
       case Success(None) => DockerHashNotFound(context.request)
       case Success(Some(hash)) => DockerHashResult.fromString(hash) match {
-        case Success(r) => DockerHashSuccessResponse(r, context.request)
+        case Success(r) => DockerHashSuccessResponse(r, None, context.request)
         case Failure(t) => DockerHashFailedResponse(t, context.request)
       }
       case Failure(throwable) => DockerHashFailedResponse(throwable, context.request)
     }
     // give the compiler a hint on the debug() override we're trying to use.
-    DockerHashActor.logger.debug("Hash result of {} was {}", dockerCliKey.fullName, result.asInstanceOf[Any])
+    DockerInfoActor.logger.debug("Hash result of {} was {}", dockerCliKey.fullName, result.asInstanceOf[Any])
     (result, context)
   }
 
@@ -116,11 +116,11 @@ object DockerCliFlow {
     */
   private def pull(notUsed: DockerHashResponse, context: DockerHashContext): DockerHashContext = {
     val dockerCliKey = cliKeyFromImageId(context)
-    DockerHashActor.logger.info(s"Attempting to pull {}", dockerCliKey.fullName)
+    DockerInfoActor.logger.info(s"Attempting to pull {}", dockerCliKey.fullName)
     val result = DockerCliClient.pull(dockerCliKey)
     result match {
-      case Success(_) => DockerHashActor.logger.info("Pulled {}", dockerCliKey.fullName)
-      case Failure(throwable) => DockerHashActor.logger.error("Docker pull failed", throwable)
+      case Success(_) => DockerInfoActor.logger.info("Pulled {}", dockerCliKey.fullName)
+      case Failure(throwable) => DockerInfoActor.logger.error("Docker pull failed", throwable)
     }
     context
   }

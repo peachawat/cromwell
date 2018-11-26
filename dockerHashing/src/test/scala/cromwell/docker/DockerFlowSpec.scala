@@ -4,7 +4,7 @@ import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import akka.testkit.ImplicitSender
 import cromwell.core.TestKitSuite
-import cromwell.docker.DockerHashActor._
+import cromwell.docker.DockerInfoActor._
 import cromwell.docker.registryv2.flows.HttpFlowWithRetry.ContextWithRequest
 
 import scala.concurrent.duration._
@@ -19,12 +19,12 @@ abstract class DockerFlowSpec(actorSystemName: String) extends TestKitSuite(acto
   protected def registryFlows: Seq[DockerFlow]
 
   // Disable cache by setting a cache size of 0 - A separate test tests the cache
-  lazy val dockerActor = system.actorOf(DockerHashActor.props(registryFlows, 1000, 20.minutes, 0)(materializer))
+  lazy val dockerActor = system.actorOf(DockerInfoActor.props(registryFlows, 1000, 20.minutes, 0)(materializer))
 
   def dockerImage(string: String) = DockerImageIdentifier.fromString(string).get.asInstanceOf[DockerImageIdentifierWithoutHash]
 
   def makeRequest(string: String) = {
-    DockerHashRequest(dockerImage(string))
+    DockerInfoRequest(dockerImage(string))
   }
 
   override protected def afterAll() = {

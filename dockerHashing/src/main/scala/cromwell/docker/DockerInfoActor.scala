@@ -7,12 +7,12 @@ import com.google.common.cache.CacheBuilder
 import cromwell.core.Dispatcher
 import cromwell.core.actor.StreamActorHelper
 import cromwell.core.actor.StreamIntegration.StreamContext
-import cromwell.docker.DockerHashActor._
+import cromwell.docker.DockerInfoActor._
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.duration.FiniteDuration
 
-final class DockerHashActor(
+final class DockerInfoActor(
                            dockerRegistryFlows: Seq[DockerFlow],
                            queueBufferSize: Int,
                            cacheEntryTTL: FiniteDuration,
@@ -46,14 +46,14 @@ final class DockerHashActor(
     .concurrencyLevel(2)
     .expireAfterWrite(cacheEntryTTL._1, cacheEntryTTL._2)
     .maximumSize(cacheSize)
-    .build[DockerImageIdentifierWithoutHash, DockerHashResult]()
+    .build[DockerImageIdentifier, DockerHashSuccessResponse]()
 
   /*
    * Intermediate sink responsible for updating the cache as soon as a successful hash is retrieved
    */
   private val updateCacheSink = Sink.foreach[(DockerHashResponse, DockerHashContext)] {
     case (response: DockerHashSuccessResponse, dockerHashContext) => 
-      cache.put(dockerHashContext.dockerImageID, response.dockerHash)
+      cache.put(dockerHashContext.dockerImageID, response)
     case _ => // Only put successful hashes in the cache
   }
 
@@ -97,14 +97,12 @@ final class DockerHashActor(
     FlowShape(partitionFlows.in, mergeFlows.out)
   }
 
-  private def checkCache(dockerHashRequest: DockerHashRequest) = {
-    Option(cache.getIfPresent(dockerHashRequest.dockerImageID)) map { hashResult => 
-      DockerHashSuccessResponse(hashResult, dockerHashRequest) 
-    }
+  private def checkCache(dockerHashRequest: DockerInfoRequest) = {
+    Option(cache.getIfPresent(dockerHashRequest.dockerImageID))
   }
 
   override protected def actorReceive: Receive = {
-    case request: DockerHashRequest =>
+    case request: DockerInfoRequest =>
       val replyTo = sender()
 
       checkCache(request) match {
@@ -119,35 +117,39 @@ final class DockerHashActor(
     .withAttributes(ActorAttributes.dispatcher(Dispatcher.IoDispatcher))
 }
 
-object DockerHashActor {
+object DockerInfoActor {
 
   val logger = LoggerFactory.getLogger("DockerRegistry")
 
   /* Response Messages */
   sealed trait DockerHashResponse {
-    def request: DockerHashRequest
+    def request: DockerInfoRequest
   }
   
-  case class DockerHashSuccessResponse(dockerHash: DockerHashResult, request: DockerHashRequest) extends DockerHashResponse
+  case class DockerSize(compressedSize: Long) {
+    def toFullSize(factor: Int) = compressedSize * (factor + 1)
+  }
+
+  case class DockerHashSuccessResponse(dockerHash: DockerHashResult, dockerCompressedSize: Option[DockerSize], request: DockerInfoRequest) extends DockerHashResponse
   
   sealed trait DockerHashFailureResponse extends DockerHashResponse {
     def reason: String
   }
-  case class DockerHashFailedResponse(failure: Throwable, request: DockerHashRequest) extends DockerHashFailureResponse {
+  case class DockerHashFailedResponse(failure: Throwable, request: DockerInfoRequest) extends DockerHashFailureResponse {
     override val reason = s"Failed to get docker hash for ${request.dockerImageID.fullName} ${failure.getMessage}"
   }
-  case class DockerHashUnknownRegistry(request: DockerHashRequest) extends DockerHashFailureResponse {
+  case class DockerHashUnknownRegistry(request: DockerInfoRequest) extends DockerHashFailureResponse {
     override val reason = s"Registry ${request.dockerImageID.host} is not supported"
   }
-  case class DockerHashNotFound(request: DockerHashRequest) extends DockerHashFailureResponse {
+  case class DockerHashNotFound(request: DockerInfoRequest) extends DockerHashFailureResponse {
     override val reason = s"Docker image ${request.dockerImageID.fullName} not found"
   }
-  case class DockerHashUnauthorized(request: DockerHashRequest) extends DockerHashFailureResponse {
+  case class DockerHashUnauthorized(request: DockerInfoRequest) extends DockerHashFailureResponse {
     override val reason = s"Unauthorized to get docker hash ${request.dockerImageID.fullName}"
   }
 
   /* Internal ADTs */
-  case class DockerHashContext(request: DockerHashRequest, replyTo: ActorRef) extends StreamContext {
+  case class DockerHashContext(request: DockerInfoRequest, replyTo: ActorRef) extends StreamContext {
     val dockerImageID = request.dockerImageID
     val credentials = request.credentials
   }
@@ -159,6 +161,6 @@ object DockerHashActor {
             queueBufferSize: Int = 100,
             cacheEntryTTL: FiniteDuration,
             cacheSize: Long)(materializer: ActorMaterializer) = {
-    Props(new DockerHashActor(dockerRegistryFlows, queueBufferSize, cacheEntryTTL, cacheSize)(materializer)).withDispatcher(Dispatcher.IoDispatcher)
+    Props(new DockerInfoActor(dockerRegistryFlows, queueBufferSize, cacheEntryTTL, cacheSize)(materializer)).withDispatcher(Dispatcher.IoDispatcher)
   }
 }

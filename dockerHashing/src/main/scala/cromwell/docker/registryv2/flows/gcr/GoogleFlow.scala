@@ -3,13 +3,12 @@ package cromwell.docker.registryv2.flows.gcr
 import akka.actor.Scheduler
 import akka.stream.scaladsl.{Flow, GraphDSL, Merge, Partition}
 import akka.stream.{ActorMaterializer, FlowShape, ThrottleMode}
-import cromwell.docker.DockerHashActor.{DockerHashContext, DockerHashResponse, DockerHashUnknownRegistry}
+import cromwell.docker.DockerInfoActor.{DockerHashContext, DockerHashResponse, DockerHashUnknownRegistry}
 import cromwell.docker.registryv2.DockerRegistryV2AbstractFlow.HttpDockerFlow
-import cromwell.docker.{DockerFlow, DockerImageIdentifierWithoutHash}
+import cromwell.docker.{DockerFlow, DockerImageIdentifier}
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-import scala.language.postfixOps
 
 class GoogleFlow(httpClientFlow: HttpDockerFlow, queriesPer100Sec: Int)(implicit ec: ExecutionContext, materializer: ActorMaterializer, scheduler: Scheduler) extends DockerFlow {
   
@@ -20,7 +19,7 @@ class GoogleFlow(httpClientFlow: HttpDockerFlow, queriesPer100Sec: Int)(implicit
   private val googleFlows = List(gcrFlow, usGcrFlow, euGcrFlow)
   
   // Throttle all requests to GCR
-  private val throttler = Flow[DockerHashContext].throttle(queriesPer100Sec, 100 seconds, queriesPer100Sec, ThrottleMode.Shaping)
+  private val throttler = Flow[DockerHashContext].throttle(queriesPer100Sec, 100.seconds, queriesPer100Sec, ThrottleMode.Shaping)
 
   override def buildFlow() = GraphDSL.create() { implicit builder =>
     import GraphDSL.Implicits._
@@ -49,7 +48,7 @@ class GoogleFlow(httpClientFlow: HttpDockerFlow, queriesPer100Sec: Int)(implicit
     FlowShape(throttle.in, merge.out)
   }
   
-  override def accepts(dockerImageIdentifierWithoutHash: DockerImageIdentifierWithoutHash) = {
-    googleFlows.exists(_.accepts(dockerImageIdentifierWithoutHash))
+  override def accepts(dockerImageIdentifier: DockerImageIdentifier) = {
+    googleFlows.exists(_.accepts(dockerImageIdentifier))
   }
 }

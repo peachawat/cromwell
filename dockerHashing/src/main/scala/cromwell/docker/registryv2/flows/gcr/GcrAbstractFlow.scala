@@ -4,7 +4,7 @@ import akka.actor.Scheduler
 import akka.http.scaladsl.model.headers.{Authorization, OAuth2BearerToken}
 import akka.stream.ActorMaterializer
 import com.google.auth.oauth2.{AccessToken, OAuth2Credentials}
-import cromwell.docker.DockerHashActor.DockerHashContext
+import cromwell.docker.DockerInfoActor.DockerHashContext
 import cromwell.docker.registryv2.DockerRegistryV2AbstractFlow
 import cromwell.docker.registryv2.DockerRegistryV2AbstractFlow.HttpDockerFlow
 
