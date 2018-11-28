@@ -100,7 +100,7 @@ object CentaurCwlRunner extends StrictLogging {
       val zipFile = File.newTemporaryFile("cwl_imports.", ".zip")
       val dir = file.parent
       if (!args.quiet) {
-        logger.info(s"Zipping files under 1mb in $dir to $zipFile")
+        println(s"Zipping files under 1mb in $dir to $zipFile")
       }
       // TODO: Only include files under 1mb for now. When cwl runners run in parallel this can use a lot of space.
       val files = dir
@@ -111,7 +111,7 @@ object CentaurCwlRunner extends StrictLogging {
       zipFile
     }
     
-    logger.info("Running centaur")
+    println("Running centaur")
 
     val workflowPath = args.workflowSource.get
     val (parsedWorkflowPath, workflowRoot) = workflowPath.path.toAbsolutePath.toString.split("#") match {
@@ -120,7 +120,7 @@ object CentaurCwlRunner extends StrictLogging {
     }
     val outdirOption = args.outdir.map(_.pathAsString)
     val testName = workflowPath.name
-    logger.info("Pre processing workflow")
+    println("Pre processing workflow")
     val preProcessedWorkflow = cwlPreProcessor
       .preProcessCwlToString(CwlFileReference(parsedWorkflowPath, workflowRoot))
       .value.unsafeRunSync() match {
@@ -130,7 +130,7 @@ object CentaurCwlRunner extends StrictLogging {
       case Right(v) => v
     }
 
-    logger.info("Pre processing inputs")
+    println("Pre processing inputs")
     val workflowContents = centaurCwlRunnerRunMode.preProcessWorkflow(preProcessedWorkflow)
     val inputContents = args.workflowInputs
       .map(centaurCwlRunnerRunMode.preProcessInput)
@@ -180,15 +180,15 @@ object CentaurCwlRunner extends StrictLogging {
     )
     val testCase = CentaurTestCase(workflow, testFormat, testOptions, submitResponseOption)
 
-    logger.info(s"Starting test for $workflowPath")
+    println(s"Starting test for $workflowPath")
 
     val pathBuilderFactory: PathBuilderFactory = centaurCwlRunnerRunMode.pathBuilderFactory
 
     try {
       import CentaurCromwellClient.{blockingEc, system}
-      logger.info("Getting PathBuilderFactory")
+      println("Getting PathBuilderFactory")
       lazy val pathBuilder = Await.result(pathBuilderFactory.withOptions(WorkflowOptions.empty), Duration.Inf)
-      logger.info("Got PathBuilderFactory")
+      println("Got PathBuilderFactory")
 
       testCase.testFunction.run.unsafeRunSync() match {
         case unexpected: SubmitHttpResponse =>
@@ -209,7 +209,7 @@ object CentaurCwlRunner extends StrictLogging {
             case Succeeded =>
               val result = handleOutput(submittedWorkflow, pathBuilder)
               if (!args.quiet) {
-                logger.info(s"Result: $result")
+                println(s"Result: $result")
               } else {
                 // Print directly to stdout during --quiet
                 println(result)
@@ -223,10 +223,10 @@ object CentaurCwlRunner extends StrictLogging {
         throw e
     } finally {
       zippedImports map { zipFile =>
-          logger.info(s"Deleting $zipFile")
+          println(s"Deleting $zipFile")
         zipFile.delete(swallowIOExceptions = true)
       }
-      logger.info(s"Terminating system")
+      println(s"Terminating system")
       Await.result(CentaurCromwellClient.system.terminate(), Duration.Inf)
       ()
     }
@@ -243,11 +243,19 @@ object CentaurCwlRunner extends StrictLogging {
       .exists(_.shouldSkip(args))
 
   def main(args: Array[String]): Unit = {
+    println("MAIN")
     val parsedArgsOption = parser.parse(args, CommandLineArguments())
+    println("PARSED")
     val exitCode = parsedArgsOption match {
-      case Some(parsedArgs) if skip(parsedArgs) => ExitCode.NotImplemented
-      case Some(parsedArgs) => runCentaur(parsedArgs)
-      case None => showUsage()
+      case Some(parsedArgs) if skip(parsedArgs) =>
+        println("SKIPPING")
+        ExitCode.NotImplemented
+      case Some(parsedArgs) =>
+        println("Running")
+        runCentaur(parsedArgs)
+      case None =>
+        println("BLAH")
+        showUsage()
     }
     System.exit(exitCode.status)
   }
