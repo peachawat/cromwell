@@ -31,6 +31,7 @@ workflow cwl_conformance_test {
             test_result_codes = run_test_index.test_result_code,
             conformance_expected_failures = conformance_expected_failures,
             test_result_outputs = run_test_index.out,
+            test_result_errors = run_test_index.err,
             test_result_output = test_result_output
     }
 
@@ -77,6 +78,7 @@ task run_test_index {
     output {
         Int test_result_code = read_int("test_result_code")
         File out = stdout()
+        File err = stderr()
     }
 }
 
@@ -84,10 +86,12 @@ task make_summary {
     input {
         Int test_count
         Array[String] test_result_outputs
+        Array[String] test_result_errors
         Array[Int] test_result_codes
         String test_result_output
         String conformance_expected_failures
         File test_result_output_lines = write_lines(test_result_outputs)
+        File test_result_error_lines = write_lines(test_result_errors)
         File test_result_code_lines = write_lines(test_result_codes)
     }
 
@@ -103,6 +107,7 @@ task make_summary {
 
             # Get the test results
             TEST_RESULT_OUTPUT="$(sed -n ${TEST_NUMBER}p ~{test_result_output_lines})"
+            TEST_RESULT_ERROR="$(sed -n ${TEST_NUMBER}p ~{test_result_error_lines})"
             TEST_RESULT_CODE="$(sed -n ${TEST_NUMBER}p ~{test_result_code_lines})"
 
             if [ "${TEST_RESULT_CODE}" -eq 0 ]; then
@@ -117,6 +122,7 @@ task make_summary {
             fi
 
             cat "$TEST_RESULT_OUTPUT" >> "~{test_result_output}"
+            cat "$TEST_RESULT_ERROR" >> "~{test_result_output}"
             echo "exited with code ${TEST_RESULT_CODE}" >> "~{test_result_output}"
         done
 
