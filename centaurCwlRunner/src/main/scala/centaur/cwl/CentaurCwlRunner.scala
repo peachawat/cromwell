@@ -110,6 +110,8 @@ object CentaurCwlRunner extends StrictLogging {
       Cmds.zip(files.toSeq: _*)(zipFile)
       zipFile
     }
+    
+    logger.info("Running centaur")
 
     val workflowPath = args.workflowSource.get
     val (parsedWorkflowPath, workflowRoot) = workflowPath.path.toAbsolutePath.toString.split("#") match {
@@ -118,6 +120,7 @@ object CentaurCwlRunner extends StrictLogging {
     }
     val outdirOption = args.outdir.map(_.pathAsString)
     val testName = workflowPath.name
+    logger.info("Pre processing workflow")
     val preProcessedWorkflow = cwlPreProcessor
       .preProcessCwlToString(CwlFileReference(parsedWorkflowPath, workflowRoot))
       .value.unsafeRunSync() match {
@@ -127,13 +130,14 @@ object CentaurCwlRunner extends StrictLogging {
       case Right(v) => v
     }
 
+    logger.info("Pre processing inputs")
     val workflowContents = centaurCwlRunnerRunMode.preProcessWorkflow(preProcessedWorkflow)
     val inputContents = args.workflowInputs
       .map(centaurCwlRunnerRunMode.preProcessInput)
       .map(preProcessed => {
         preProcessed.value.unsafeRunSync() match {
           case Left(errors) =>
-            logger.error(s"Failed to pre process cwl workflow: ${errors.toList.mkString(", ")}")
+            logger.error(s"Failed to pre process cwl inputs: ${errors.toList.mkString(", ")}")
             return ExitCode.Failure
           case Right(value) => value
         }
@@ -176,15 +180,15 @@ object CentaurCwlRunner extends StrictLogging {
     )
     val testCase = CentaurTestCase(workflow, testFormat, testOptions, submitResponseOption)
 
-    if (!args.quiet) {
-      logger.info(s"Starting test for $workflowPath")
-    }
+    logger.info(s"Starting test for $workflowPath")
 
     val pathBuilderFactory: PathBuilderFactory = centaurCwlRunnerRunMode.pathBuilderFactory
 
     try {
       import CentaurCromwellClient.{blockingEc, system}
+      logger.info("Getting PathBuilderFactory")
       lazy val pathBuilder = Await.result(pathBuilderFactory.withOptions(WorkflowOptions.empty), Duration.Inf)
+      logger.info("Got PathBuilderFactory")
 
       testCase.testFunction.run.unsafeRunSync() match {
         case unexpected: SubmitHttpResponse =>
@@ -213,13 +217,16 @@ object CentaurCwlRunner extends StrictLogging {
               ExitCode.Success
           }
       }
+    } catch {
+      case e: Exception => 
+        logger.warn("OMG", e)
+        throw e
     } finally {
       zippedImports map { zipFile =>
-        if (!args.quiet) {
           logger.info(s"Deleting $zipFile")
-        }
         zipFile.delete(swallowIOExceptions = true)
       }
+      logger.info(s"Terminating system")
       Await.result(CentaurCromwellClient.system.terminate(), Duration.Inf)
       ()
     }
