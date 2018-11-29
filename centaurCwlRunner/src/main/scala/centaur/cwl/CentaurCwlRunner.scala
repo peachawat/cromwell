@@ -82,7 +82,7 @@ object CentaurCwlRunner extends StrictLogging {
         action((s, c) => c.copy(workflowInputs = Option(File(s))))
 
       opt[Unit]("quiet").text("Only print warnings and errors.").optional().
-        action((_, c) => c.copy(quiet = true))
+        action((_, c) => c.copy(quiet = c.quiet))
 
       opt[String]("outdir").text("Output directory, default current directory.").optional().
         action((s, c) =>
@@ -236,12 +236,23 @@ object CentaurCwlRunner extends StrictLogging {
       .exists(_.shouldSkip(args))
 
   def main(args: Array[String]): Unit = {
-    val parsedArgsOption = parser.parse(args, CommandLineArguments())
-    val exitCode = parsedArgsOption match {
-      case Some(parsedArgs) if skip(parsedArgs) => ExitCode.NotImplemented
-      case Some(parsedArgs) => runCentaur(parsedArgs)
-      case None => showUsage()
+    try {
+      println(s"FINDME: temp dir = ${File.temp}")
+      println(s"FINDME: temp dir exists = ${File.temp.exists}")
+      println(s"FINDME: args = ${args.mkString("[", ",", "]")}")
+      val parsedArgsOption = parser.parse(args, CommandLineArguments())
+      println(s"FINDME: parsed = $parsedArgsOption")
+      val exitCode = parsedArgsOption match {
+        case Some(parsedArgs) if skip(parsedArgs) => ExitCode.NotImplemented
+        case Some(parsedArgs) => runCentaur(parsedArgs)
+        case None => showUsage()
+      }
+      println(s"FINDME: exitCode.status = ${exitCode.status}")
+      System.exit(exitCode.status)
+    } catch {
+      case t: Throwable =>
+        t.printStackTrace()
+        System.exit(123)
     }
-    System.exit(exitCode.status)
   }
 }

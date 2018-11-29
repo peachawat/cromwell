@@ -15,7 +15,7 @@ workflow cwl_conformance_test {
             centaur_cwl_runner = centaur_cwl_runner
     }
 
-    scatter (test_index in range(get_test_count.test_count)) {
+    scatter (test_index in range(3)) {
         call run_test_index {
             input:
                 cwl_dir = cwl_dir,
@@ -27,6 +27,7 @@ workflow cwl_conformance_test {
 
     call make_summary {
         input:
+            cwl_dir = cwl_dir,
             test_count = get_test_count.test_count,
             test_result_codes = run_test_index.test_result_code,
             conformance_expected_failures = conformance_expected_failures,
@@ -82,6 +83,7 @@ task run_test_index {
 
 task make_summary {
     input {
+        String cwl_dir
         Int test_count
         Array[String] test_result_outputs
         Array[Int] test_result_codes
@@ -96,7 +98,7 @@ task make_summary {
         touch unexpected_pass
         touch unexpected_fail
 
-        for TEST_NUMBER in $(seq ~{test_count}); do
+        for TEST_NUMBER in $(seq 3); do
             # Check if test is supposed to fail
             grep -q "^${TEST_NUMBER}$" "~{conformance_expected_failures}"
             TEST_IN_EXPECTED_FAILED=$?
@@ -119,6 +121,8 @@ task make_summary {
             cat "$TEST_RESULT_OUTPUT" >> "~{test_result_output}"
             echo "exited with code ${TEST_RESULT_CODE}" >> "~{test_result_output}"
         done
+
+        grep . ~{cwl_dir}/v1.0/v1.0/cromwell-executions/cwl_conformance_test/*/call-run_test_index/shard-*/execution/{test_result_code,stderr,stdout} >> "~{test_result_output}"
 
         echo "---" >> "~{test_result_output}"
         echo "Conformance percentage at $(( 100 * ${TEST_PASSING} / ~{test_count} ))%" >> "~{test_result_output}"

@@ -740,11 +740,24 @@ cromwell::build::setup_conformance_environment() {
 }
 
 cromwell::build::assemble_jars() {
+    mkdir -p ${CROMWELL_BUILD_ROOT_DIRECTORY}/server/target/scala-2.12
+    (
+        # shellcheck disable=SC2164
+        cd ${CROMWELL_BUILD_ROOT_DIRECTORY}/server/target/scala-2.12
+        curl -O https://storage.googleapis.com/kshakir-dsde-cromwell-dev/conformance_debug/cromwell-37-a8fc174-SNAP.jar
+    )
+    mkdir -p ${CROMWELL_BUILD_ROOT_DIRECTORY}/centaurCwlRunner/target/scala-2.12
+    (
+        # shellcheck disable=SC2164
+        cd ${CROMWELL_BUILD_ROOT_DIRECTORY}/centaurCwlRunner/target/scala-2.12
+        curl -O https://storage.googleapis.com/kshakir-dsde-cromwell-dev/conformance_debug/centaur-cwl-runner-37-8732448-SNAP.jar
+    )
+
     cromwell::private::find_cromwell_jar
-    if [ "${CROMWELL_BUILD_IS_CI}" = "true" ] || ! cromwell::private::exists_cromwell_jar; then
-        echo "Please wait, building jars…"
-        cromwell::private::assemble_jars
-    fi
+    #if [ "${CROMWELL_BUILD_IS_CI}" = "true" ] || ! cromwell::private::exists_cromwell_jar; then
+    #    echo "Please wait, building jars…"
+    #    cromwell::private::assemble_jars
+    #fi
     cromwell::private::find_cromwell_jar
     if ! cromwell::private::exists_cromwell_jar; then
         echo "Error: find_cromwell_jar did not locate a cromwell jar even after assembly" >&2

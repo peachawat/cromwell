@@ -11,6 +11,34 @@ cromwell::build::setup_conformance_environment
 
 cromwell::build::assemble_jars
 
+(
+    set +e
+    set -x
+    free -m
+    java -Xmx1g -jar ${CROMWELL_BUILD_ROOT_DIRECTORY}/centaurCwlRunner/target/scala-2.12/centaur-cwl-runner-37-8732448-SNAP.jar --skip-file centaurCwlRunner/src/bin/../../../centaurCwlRunner/src/main/resources/skipped_tests.csv --version
+    echo exit code
+    echo $?
+
+    cd /home/travis/build/broadinstitute/cromwell/common-workflow-language/v1.0
+
+
+    echo "Cwltool info:"
+    cwltool --version
+    cwltool --print-pre v1.0/bwa-mem-tool.cwl
+
+    mkdir mytmpdir
+
+    java -Xmx1g \
+      -jar /home/travis/build/broadinstitute/cromwell/centaurCwlRunner/src/bin/../../../centaurCwlRunner/target/scala-2.12/centaur-cwl-runner-37-8732448-SNAP.jar \
+      --skip-file /home/travis/build/broadinstitute/cromwell/centaurCwlRunner/src/bin/../../../centaurCwlRunner/src/main/resources/skipped_tests.csv \
+      --outdir=$PWD/mytmpdir \
+      --quiet \
+      v1.0/bwa-mem-tool.cwl \
+      v1.0/bwa-mem-job.json
+
+    set -e
+)
+
 CENTAUR_CWL_RUNNER_MODE="local"
 
 # Export variables used in conf files and commands
