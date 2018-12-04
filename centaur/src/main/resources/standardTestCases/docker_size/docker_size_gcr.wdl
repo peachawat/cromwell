@@ -22,7 +22,7 @@ task large_gcr_image {
 }
 
 workflow docker_size_gcr {
-   call large_gcr_image as large_dockerhub_image_with_tag { input: docker_image = "gcr.io/broad-dsde-cromwell-dev/centaur/gatk:4.0.5.1" }
+   call large_gcr_image as large_gcr_image_with_tag { input: docker_image = "gcr.io/broad-dsde-cromwell-dev/centaur/gatk:4.0.5.1" }
    # This is 4.0.5.2 - Use a different image to make sure we get the size for both
-   call large_gcr_image as large_dockerhub_image_with_hash { input: docker_image = "gcr.io/broad-dsde-cromwell-dev/centaur/gatk@sha256:d78b14aa86b42638fe2844def82816d002a134cc19154a21dac7067ecb3c7e06" }
+   call large_gcr_image as large_gcr_image_with_hash { input: docker_image = "gcr.io/broad-dsde-cromwell-dev/centaur/gatk@sha256:d78b14aa86b42638fe2844def82816d002a134cc19154a21dac7067ecb3c7e06" }
 }

@@ -159,7 +159,10 @@ class WorkflowDockerLookupActor private[workflow](workflowId: WorkflowId,
   private def recordMappingAndRespond(response: DockerHashSuccessResponse, data: WorkflowDockerLookupActorData): State = {
     // Add the new label to hash mapping to the current set of mappings.
     val request = response.request
-    data.hashRequests(request) foreach { _ ! DockerHashSuccessResponse(response.dockerHash, response.dockerCompressedSize, request) }
+    data.hashRequests.get(request) match {
+      case Some(actors) => actors foreach { _ ! DockerHashSuccessResponse(response.dockerHash, response.dockerCompressedSize, request) }
+      case None => log.error(s"Could not find the actors associated with $request. Available requests are ${data.hashRequests.values.mkString(", ")}")
+    } 
     val updatedData = data.copy(hashRequests = data.hashRequests - request, mappings = data.mappings + (request.dockerImageID -> DockerImageMapping(response.dockerHash, response.dockerCompressedSize)))
     stay using updatedData
   }
