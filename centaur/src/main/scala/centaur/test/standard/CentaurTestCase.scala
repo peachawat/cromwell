@@ -45,6 +45,8 @@ case class CentaurTestCase(workflow: Workflow,
 
     testOptions.ignore || !backendSupported
   }
+
+  def containsTag(tag: String): Boolean = testOptions.tags.contains(tag)
 }
 
 object CentaurTestCase {

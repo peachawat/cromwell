@@ -1,7 +1,7 @@
 name: cromwell_restart
 testFormat: CromwellRestartWithRecover
 callMark: cromwell_restart.cromwell_killer
-tags: [engine_upgrade]
+tags: [engine_upgrade,papi_upgrade]
 
 files {
   workflow: cromwell_restart/cromwell_restart.wdl

@@ -2,7 +2,7 @@ name: call_cache_cha_cha_papi
 testFormat: CromwellRestartWithRecover
 callMark: call_cache_cha_cha.sleep_during_restart
 backends: [Papi]
-tags: [engine_upgrade]
+tags: [engine_upgrade,papi_upgrade]
 retryTestFailures: false
 
 files {

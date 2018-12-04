@@ -16,7 +16,7 @@
 #     Variables for use in other scripts.
 #
 #   - crmdbg
-#     Quick debug scripts. Example: `crmdbg=y src/ci/bin/testCentaulLocal.sh`
+#     Quick debug scripts. Example: `crmdbg=y src/ci/bin/testCentaurLocal.sh`
 #
 #   - crmcit
 #     Simulate a centaur integration test build. Example: `crmcit=y src/ci/bin/testCentaurPapiV2.sh`
