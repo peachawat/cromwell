@@ -161,7 +161,7 @@ class WorkflowDockerLookupActor private[workflow](workflowId: WorkflowId,
     val request = response.request
     data.hashRequests.get(request) match {
       case Some(actors) => actors foreach { _ ! DockerHashSuccessResponse(response.dockerHash, response.dockerCompressedSize, request) }
-      case None => log.error(s"Could not find the actors associated with $request. Available requests are ${data.hashRequests.values.mkString(", ")}")
+      case None => fail(new Exception(s"Could not find the actors associated with $request. Available requests are ${data.hashRequests.keys.mkString(", ")}"))
     } 
     val updatedData = data.copy(hashRequests = data.hashRequests - request, mappings = data.mappings + (request.dockerImageID -> DockerImageMapping(response.dockerHash, response.dockerCompressedSize)))
     stay using updatedData
